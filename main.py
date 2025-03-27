@@ -4,16 +4,18 @@ import yt_dlp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
+
 def get_args():
     parser = argparse.ArgumentParser(description="A script for downloading the videos on a BlueSky profile.")
 
     parser.add_argument('username', type=str, help='The username of the profile you want to download videos from.')
     parser.add_argument('-f', '--folder', type=str, help='The folder you wish to store the videos in.', required=False)
     parser.add_argument('-t', '--threads', type=int, default=3, help='The number of threads to use when downloading videos.')
+    parser.add_argument('-l', '--limit', type=int, required=False, help='Limit the number of videos that will be downloaded.')
 
     return parser.parse_args()
 
-def get_users_videos(client, username, cursor = None):
+def get_users_videos(client, username,  limit = None, cursor = None):
     posts = []
     curr_cursor = cursor
 
@@ -27,6 +29,9 @@ def get_users_videos(client, username, cursor = None):
             timestamp = post["post"]["indexed_at"]
 
             posts.append({"playlist_url": playlist_url, "timestamp": timestamp})
+
+        if limit and len(posts) >= limit:
+            return posts[0:limit]
 
         if not curr_cursor:
             break
@@ -43,10 +48,10 @@ def main():
     args = get_args()
     folder = args.folder if args.folder else args.username
     client = Client(base_url="https://public.api.bsky.app/")
-
+    
     try:
         print(f"Fetching videos from {args.username}")
-        cleaned_posts = get_users_videos(client, args.username)
+        cleaned_posts = get_users_videos(client, args.username, args.limit)
 
         if not cleaned_posts:
             print("Sorry, I couldn't find any videos on that profile.")
