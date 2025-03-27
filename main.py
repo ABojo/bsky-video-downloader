@@ -1,7 +1,8 @@
 import argparse
 from atproto import Client
 import yt_dlp
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 def get_args():
     parser = argparse.ArgumentParser(description="A script for downloading the videos on a BlueSky profile.")
@@ -33,7 +34,7 @@ def get_users_videos(client, username, cursor = None):
     return posts
 
 def download_video(url, folder, filename):
-    ydl_options = {"format": "best", "quiet": True, "outtmpl": f"{folder}/{filename}"}
+    ydl_options = {"format": "best", "quiet": True, "noprogress": True, "outtmpl": f"{folder}/{filename}"}
 
     with yt_dlp.YoutubeDL(ydl_options) as ydl:
         ydl.download(url)
@@ -44,11 +45,25 @@ def main():
     client = Client(base_url="https://public.api.bsky.app/")
 
     try:
+        print(f"Fetching videos from {args.username}")
         cleaned_posts = get_users_videos(client, args.username)
 
+        if not cleaned_posts:
+            print("Sorry, I couldn't find any videos on that profile.")
+            return 
+        
+        print(f"Found {len(cleaned_posts)} videos.")
+
         with ThreadPoolExecutor(max_workers=args.threads) as executor:
+            futures = []
+
             for post in cleaned_posts:
-                executor.submit(download_video, post["playlist_url"], folder, f"{args.username}-{post["timestamp"]}.mp4")
+                futures.append(executor.submit(download_video, post["playlist_url"], folder, f"{args.username}-{post["timestamp"]}.mp4"))
+
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Downloading Videos"):
+                future.result() 
+
+        print("Downloading complete.")
 
     except Exception as e:
         print(e)
